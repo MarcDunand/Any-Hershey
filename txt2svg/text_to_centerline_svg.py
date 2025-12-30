@@ -429,9 +429,7 @@ def centerlines_from_outlines(
         bw = binary_closing(bw, square(3))
 
     # Skeletonize to 1px width
-    print("BEFORE")
     skel = skeletonize(bw, method='lee')
-    print("AFTER")
 
     # Vectorize skeleton pixels -> polylines in mm
     centerlines = _vectorize_skeleton(
@@ -564,7 +562,7 @@ class App(tk.Tk):
         self.skel_px_per_mm = tk.IntVar(value=38)
         self.skel_close_mm = tk.DoubleVar(value=0.10)
         self.skel_min_branch_mm = tk.DoubleVar(value=0.28)
-        self.skel_close_gaps = tk.BooleanVar(value=False)
+        self.skel_close_gaps = tk.BooleanVar(value=True)
 
         self._build()
 
@@ -611,7 +609,6 @@ class App(tk.Tk):
         self.status.grid(row=13, column=1, columnspan=3, sticky="w")
 
     def on_generate(self):
-        print("on_generate: start", flush=True)
         text = self.txt.get("1.0", "end").strip()
         if not text:
             messagebox.showwarning("No text", "Type something first.")
@@ -627,13 +624,11 @@ class App(tk.Tk):
 
         try:
             file_exists_or_raise(INKSCAPE_EXE, f"Inkscape not found at: {INKSCAPE_EXE}")
-            print("on_generate: inkscape exists", flush=True)
 
             self.status.config(text="Converting… (generating mask preview)")
             self.update_idletasks()
 
 
-            print("on_generate: calling text_to_centerline_polylines", flush=True)
             bw, polylines = text_to_centerline_polylines(
                 text=text,
                 font_family=self.font_family.get(),
@@ -644,7 +639,6 @@ class App(tk.Tk):
                 skel_min_branch_mm=float(self.skel_min_branch_mm.get()),
                 skel_close_gaps=bool(self.skel_close_gaps.get()),
             )
-            print(f"on_generate: got {len(polylines)} polylines", flush=True)
 
 
             # --- show bw preview immediately ---
