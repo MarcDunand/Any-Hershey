@@ -23,6 +23,7 @@ Requires:
 import os
 import math
 import time
+import json
 import tempfile
 import subprocess
 from dataclasses import dataclass
@@ -36,7 +37,7 @@ from skimage.morphology import skeletonize, binary_closing, square
 
 from svgpathtools import svg2paths2
 
-# --- Minimal UI ---
+# UI
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -44,6 +45,23 @@ from tkinter import ttk, filedialog, messagebox
 #More error messages
 import faulthandler
 faulthandler.enable()
+
+
+#Silence irrelevant warnings suggesting upgrades to skimage that break skeletonization
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message=r".*`square` is deprecated.*"
+)
+
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message=r".*`binary_closing` is deprecated.*"
+)
+
 
 
 
@@ -56,6 +74,13 @@ INKSCAPE_EXE = r"C:\Program Files\Inkscape\bin\inkscape.exe"
 
 # Inkscape uses 96 px per inch, so:
 PX_PER_MM = 96.0 / 25.4
+
+# Filename containing preset values for text in a specific alphabet
+PRESETS_FILENAME = "language_presets.json"
+
+# Methods used to create the rasterized bitmask of characters
+MASK_METHODS = ["Inkscape Raster", "XOR"]
+
 
 
 # =========================
@@ -71,6 +96,31 @@ def file_exists_or_raise(path: str, msg: str):
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
+
+
+
+# =========================
+# Language presets (JSON)
+# =========================
+
+def load_language_presets() -> dict:
+    """
+    Load language presets from language_presets.json (same folder as this script).
+    Returns a dict: { preset_name: {key: value, ...}, ... }
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(script_dir, PRESETS_FILENAME)
+
+    if not os.path.exists(path):
+        # Safe fallback: one default option
+        return {"Default": {}}
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError(f"{PRESETS_FILENAME} must contain a JSON object at the top level.")
+    return data
 
 
 # =========================
@@ -148,6 +198,53 @@ def inkscape_text_to_paths(text: str, font_family: str, font_size_mm: float) -> 
     with open(final_svg, "w", encoding="utf-8") as f:
         f.write(data)
     return final_svg
+
+
+
+def rasterize_outline_svg_to_bw(outline_svg: str, px_per_mm: int) -> np.ndarray:
+    """
+    Use Inkscape to rasterize the outline SVG to a filled PNG (black on white),
+    then threshold into a boolean mask (True = ink).
+    """
+    dpi = px_per_mm * 25.4  # 1 inch = 25.4 mm
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_png = os.path.join(tmpdir, "mask.png")
+        out_png_slash = out_png.replace("\\", "/")
+
+        # Export just the drawing bbox, as a PNG
+        actions = (
+            f"export-filename:{out_png_slash};"
+            "export-area-drawing;"
+            "export-type:png;"
+            f"export-dpi:{dpi};"
+            "export-background:white;"
+            "export-background-opacity:1.0;"
+            "export-do;"
+            "file-close"
+        )
+
+        proc = subprocess.run(
+            [INKSCAPE_EXE, outline_svg, "--actions", actions],
+            capture_output=True,
+            text=True
+        )
+
+        if proc.returncode != 0 or not os.path.exists(out_png):
+            raise RuntimeError(
+                "Inkscape raster export failed.\n\n"
+                f"Return code: {proc.returncode}\n\n"
+                f"STDOUT:\n{proc.stdout}\n\n"
+                f"STDERR:\n{proc.stderr}\n"
+            )
+
+        img = Image.open(out_png).convert("L")
+        arr = np.asarray(img, dtype=np.uint8)
+
+    # Black shapes on white background
+    bw = arr < 128
+    return bw
+
 
 
 
@@ -509,6 +606,7 @@ def text_to_centerline_polylines(
     skel_close_mm: float,
     skel_min_branch_mm: float,
     skel_close_gaps: bool,
+    mask_method: str,
 ) -> Tuple[np.ndarray, List[List[Tuple[float, float]]]]:
     """
     Convenience wrapper:
@@ -516,33 +614,53 @@ def text_to_centerline_polylines(
     """
     outline_svg = inkscape_text_to_paths(text, font_family, font_size_mm)
     try:
-        shaped = load_and_sample(outline_svg, sample_step_mm)
+        if mask_method == "Inkscape Raster":
+            # Inkscape itself rasterizes the filled outlines (handles overlaps + holes correctly)
+            bw = rasterize_outline_svg_to_bw(outline_svg, px_per_mm=skel_px_per_mm)
+
+            if skel_close_gaps:
+                bw = binary_closing(bw, square(3))
+
+            skel = skeletonize(bw, method="lee")
+            centerlines = _vectorize_skeleton(
+                skel, px_per_mm=float(skel_px_per_mm), min_branch_mm=float(skel_min_branch_mm)
+            )
+            return bw, centerlines
+
+        else:
+            # Current approach: sample paths -> XOR-filled mask inside centerlines_from_outlines()
+            shaped = load_and_sample(outline_svg, sample_step_mm)
+
+            bw, centerlines = centerlines_from_outlines(
+                shaped.polylines_mm,
+                px_per_mm=skel_px_per_mm,
+                close_tol_mm=skel_close_mm,
+                min_branch_mm=skel_min_branch_mm,
+                do_close_gaps=skel_close_gaps,
+                return_bw=True,
+            )
+            return bw, centerlines
+
     finally:
         try:
             os.remove(outline_svg)
         except Exception:
             pass
 
-    # Centerline conversion (the "main algorithm")
-    bw, centerlines = centerlines_from_outlines(
-    shaped.polylines_mm,
-    px_per_mm=skel_px_per_mm,
-    close_tol_mm=skel_close_mm,
-    min_branch_mm=skel_min_branch_mm,
-    do_close_gaps=skel_close_gaps,
-    return_bw=True,
-    )
-    return bw, centerlines
 
 
-
-# =========================
-# UI (minimal)
-# =========================
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+
+        # Load presets from external JSON
+        try:
+            self.language_presets = load_language_presets()
+        except Exception as e:
+            # Don't crash the whole app; fall back and show why
+            self.language_presets = {"Default": {}}
+            messagebox.showwarning("Preset load failed", f"Could not load {PRESETS_FILENAME}:\n\n{e}")
 
         def _tk_exception_handler(exc, val, tb):
             import traceback
@@ -554,7 +672,9 @@ class App(tk.Tk):
 
         self.title("Text → Centerline SVG (Inkscape + Skeletonize)")
 
-        # Defaults (tweak later)
+
+        self.language_preset = tk.StringVar(value="Default")
+        self.mask_method = tk.StringVar(value="XOR")
         self.font_family = tk.StringVar(value="Noto Sans CJK SC")
         self.font_size_mm = tk.DoubleVar(value=8.0)
         self.sample_step_mm = tk.DoubleVar(value=1.0)
@@ -565,6 +685,36 @@ class App(tk.Tk):
         self.skel_close_gaps = tk.BooleanVar(value=True)
 
         self._build()
+
+    def apply_language_preset(self, preset_name: str):
+        preset = self.language_presets.get(preset_name, {})
+        if not isinstance(preset, dict) or not preset:
+            return
+
+        # Only overwrite keys that exist in the preset dict
+        if "mask_method" in preset:
+            self.mask_method.set(str(preset["mask_method"]))
+        if "font_family" in preset:
+            self.font_family.set(str(preset["font_family"]))
+        if "font_size_mm" in preset:
+            self.font_size_mm.set(float(preset["font_size_mm"]))
+        if "sample_step_mm" in preset:
+            self.sample_step_mm.set(float(preset["sample_step_mm"]))
+
+        if "skel_px_per_mm" in preset:
+            self.skel_px_per_mm.set(int(preset["skel_px_per_mm"]))
+        if "skel_close_mm" in preset:
+            self.skel_close_mm.set(float(preset["skel_close_mm"]))
+        if "skel_min_branch_mm" in preset:
+            self.skel_min_branch_mm.set(float(preset["skel_min_branch_mm"]))
+        if "skel_close_gaps" in preset:
+            self.skel_close_gaps.set(bool(preset["skel_close_gaps"]))
+
+    def _on_preset_selected(self, event=None):
+        name = self.language_preset.get()
+        self.apply_language_preset(name)
+        self.status.config(text=f"Preset applied: {name}")
+
 
     def _build(self):
         frm = ttk.Frame(self, padding=10)
@@ -583,30 +733,60 @@ class App(tk.Tk):
             ttk.Label(frm, text=label).grid(row=r, column=0, sticky="w", pady=2)
             widget.grid(row=r, column=1, sticky="ew", pady=2)
 
-        add_row(2, "Font family:", ttk.Entry(frm, textvariable=self.font_family))
-        add_row(3, "Font size (mm):", ttk.Entry(frm, textvariable=self.font_size_mm))
-        add_row(4, "Sample step (mm):", ttk.Entry(frm, textvariable=self.sample_step_mm))
+        ttk.Label(frm, text="Language preset:").grid(row=2, column=0, sticky="w", pady=2)
 
-        ttk.Separator(frm).grid(row=5, column=0, columnspan=4, sticky="ew", pady=8)
+        preset_box = ttk.Combobox(
+            frm,
+            textvariable=self.language_preset,
+            values=list(self.language_presets.keys()),
+            state="readonly",
+            width=28,
+        )
+        preset_box.grid(row=2, column=1, sticky="ew", pady=2)
+        preset_box.bind("<<ComboboxSelected>>", self._on_preset_selected)
 
-        add_row(6, "Skeleton px/mm:", ttk.Entry(frm, textvariable=self.skel_px_per_mm))
-        add_row(7, "Closed-loop tol (mm):", ttk.Entry(frm, textvariable=self.skel_close_mm))
-        add_row(8, "Min branch length (mm):", ttk.Entry(frm, textvariable=self.skel_min_branch_mm))
+
+        ttk.Separator(frm).grid(row=3, column=0, columnspan=4, sticky="ew", pady=8)
+
+
+        ttk.Label(frm, text="Mask method:").grid(row=4, column=0, sticky="w", pady=2)
+
+        mask_box = ttk.Combobox(
+            frm,
+            textvariable=self.mask_method,
+            values=MASK_METHODS,
+            state="readonly",
+            width=28,
+        )
+        mask_box.grid(row=4, column=1, sticky="ew", pady=2)
+
+
+        add_row(5, "Font family:", ttk.Entry(frm, textvariable=self.font_family))
+        add_row(6, "Font size (mm):", ttk.Entry(frm, textvariable=self.font_size_mm))
+        add_row(7, "Sample step (mm):", ttk.Entry(frm, textvariable=self.sample_step_mm))
+
+
+
+        ttk.Separator(frm).grid(row=8, column=0, columnspan=4, sticky="ew", pady=8)
+
+        add_row(9, "Skeleton px/mm:", ttk.Entry(frm, textvariable=self.skel_px_per_mm))
+        add_row(10, "Closed-loop tol (mm):", ttk.Entry(frm, textvariable=self.skel_close_mm))
+        add_row(11, "Min branch length (mm):", ttk.Entry(frm, textvariable=self.skel_min_branch_mm))
         ttk.Checkbutton(frm, text="Close tiny gaps before skeletonize",
-                        variable=self.skel_close_gaps).grid(row=9, column=0, columnspan=2, sticky="w", pady=2)
+                        variable=self.skel_close_gaps).grid(row=12, column=0, columnspan=2, sticky="w", pady=2)
 
-        ttk.Separator(frm).grid(row=10, column=0, columnspan=4, sticky="ew", pady=8)
+        ttk.Separator(frm).grid(row=13, column=0, columnspan=4, sticky="ew", pady=8)
 
-        ttk.Label(frm, text="Mask preview (bw):").grid(row=11, column=0, sticky="w", pady=(8, 2))
+        ttk.Label(frm, text="Mask preview (bw):").grid(row=14, column=0, sticky="w", pady=(8, 2))
         self.preview = ttk.Label(frm)
-        self.preview.grid(row=12, column=0, columnspan=4, sticky="w", pady=(0, 6))
+        self.preview.grid(row=15, column=0, columnspan=4, sticky="w", pady=(0, 6))
         self._preview_imgtk = None  # keep a reference so Tk doesn't garbage-collect
 
         btn = ttk.Button(frm, text="Generate SVG…", command=self.on_generate)
-        btn.grid(row=13, column=0, sticky="w")
+        btn.grid(row=16, column=0, sticky="w")
 
         self.status = ttk.Label(frm, text="Ready.")
-        self.status.grid(row=13, column=1, columnspan=3, sticky="w")
+        self.status.grid(row=16, column=1, columnspan=3, sticky="w")
 
     def on_generate(self):
         text = self.txt.get("1.0", "end").strip()
@@ -638,6 +818,7 @@ class App(tk.Tk):
                 skel_close_mm=float(self.skel_close_mm.get()),
                 skel_min_branch_mm=float(self.skel_min_branch_mm.get()),
                 skel_close_gaps=bool(self.skel_close_gaps.get()),
+                mask_method=self.mask_method.get(),
             )
 
 
