@@ -32,7 +32,7 @@
     "skel_close_gaps": true,
     "skel_px_per_mm": 60,
     "sample_step_mm": 0.7,
-    "skel_min_branch_mm": 0.05,
+    "skel_min_branch_mm": 0.06,
     "skel_close_mm": 0.08,
     "mask_method": "Inkscape Raster"
   },
@@ -63,5 +63,37 @@
     "skel_min_branch_mm": 0.08,
     "skel_close_mm": 0.12,
     "mask_method" : "Inkscape Raster"
+  },
+
+    "Korean (Hangul)": {
+    "font_family": "Malgun Gothic",
+    "skel_close_gaps": true,
+    "skel_px_per_mm": 50,
+    "sample_step_mm": 0.8,
+    "skel_min_branch_mm": 0.10,
+    "skel_close_mm": 0.12
+  },
+
+    "Hindi-family (Devanagari)": {
+    "font_family": "Kalam",
+    "font_size_mm": 8.0,
+    "sample_step_mm": 0.8,
+    "skel_px_per_mm": 48,
+    "skel_close_mm": 0.10,
+    "skel_min_branch_mm": 0.08,
+    "skel_close_gaps": true,
+    "mask_method": "Inkscape Raster"
+  },
+
+    "Arabic (Modern Standard)": {
+    "font_family": "Noto Naskh Arabic",
+    "font_size_mm": 9.0,
+    "sample_step_mm": 0.8,
+    "skel_px_per_mm": 55,
+    "skel_close_mm": 0.10,
+    "skel_min_branch_mm": 0.08,
+    "skel_close_gaps": true,
+    "mask_method": "Inkscape Raster"
   }
+
 }

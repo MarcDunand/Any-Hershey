@@ -1,0 +1,11 @@
+-note that you need to use inkscape
+-make note about how to add fonts to inkscape
+	-https://fonts.google.com/noto/specimen/Noto+Serif+Devanagari
+	-https://fonts.google.com/specimen/Kalam?preview.text=%E0%A4%87%E0%A4%88&query=devanagari
+	-https://fonts.google.com/noto/specimen/Noto+Naskh+Arabic
+	-https://support.microsoft.com/en-us/windows/manage-fonts-in-windows-f12d0657-2fc8-7613-c76f-88d043b334b8
+-remove popup saying svg successfully saved?
+
+
+Useful links:
+	-https://wordscr.com/about/
