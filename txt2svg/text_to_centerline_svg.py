@@ -34,6 +34,8 @@ from math import hypot
 import numpy as np
 from PIL import Image, ImageDraw, ImageChops, ImageTk
 from skimage.morphology import skeletonize, binary_closing, square
+from skimage.measure import label, regionprops
+
 
 from svgpathtools import svg2paths2
 
@@ -468,6 +470,7 @@ def _vectorize_skeleton(skel_bool: np.ndarray,
 def centerlines_from_outlines(
     polylines_mm: List[List[Tuple[float, float]]],
     px_per_mm: int = 38,
+    font_size_mm=8.0,
     close_tol_mm: float = 0.10,
     min_branch_mm: float = 0.28,
     do_close_gaps: bool = False,
@@ -522,16 +525,22 @@ def centerlines_from_outlines(
 
     bw = np.array(mask, dtype=bool)
 
+    # Pull dots out first
+    bw_main, dots = extract_small_components_as_dots(
+        bw,
+        px_per_mm=float(px_per_mm),
+        font_size_mm=float(font_size_mm),
+    )
+
     if do_close_gaps:
-        bw = binary_closing(bw, square(3))
+        bw_main = binary_closing(bw_main, square(3))
 
-    # Skeletonize to 1px width
-    skel = skeletonize(bw, method='lee')
-
-    # Vectorize skeleton pixels -> polylines in mm
+    skel = skeletonize(bw_main, method='lee')
     centerlines = _vectorize_skeleton(
         skel, px_per_mm=float(px_per_mm), min_branch_mm=float(min_branch_mm)
     )
+
+    centerlines.extend(dots_to_circle_polylines(dots))
 
     if return_bw:
         return bw, centerlines
@@ -547,7 +556,7 @@ def centerlines_from_outlines(
 def polylines_to_svg(polylines_mm: List[List[Tuple[float, float]]],
                      out_svg_path: str,
                      margin_mm: float = 2.0,
-                     stroke_width_mm: float = 0.3) -> None:
+                     stroke_width_mm: float = 0.15) -> None:
     """
     Write a minimal SVG containing one <path> per polyline.
 
@@ -593,6 +602,125 @@ def polylines_to_svg(polylines_mm: List[List[Tuple[float, float]]],
         f.write(svg)
 
 
+
+def extract_small_components_as_dots(
+    bw: np.ndarray,
+    px_per_mm: float,
+    font_size_mm: float,
+    max_dim_mm: Optional[float] = None,
+    max_area_mm2: Optional[float] = None,
+    min_area_mm2: Optional[float] = None,
+):
+    """
+    Find small *isolated* connected components in the binary mask and treat them as dots.
+
+    Returns:
+      bw_main: bw with dot components removed
+      dots_mm: list of (cx_mm, cy_mm, r_mm) tuples for re-injection as vector circles
+
+    Notes:
+      - We use 8-connectivity (connectivity=2) so diagonal pixels are considered connected.
+      - Thresholds are in mm, so behavior stays stable across different px_per_mm.
+      - This will preserve Arabic dots, Latin i/j dots, many diacritics, etc.
+    """
+    if bw.size == 0:
+        return bw, []
+
+
+    # Scale-aware defaults for min and max disconnected components sizes
+    if max_dim_mm is None:
+        # dots typically ~ 0.15–0.35 em in diameter; start around 0.30em
+        max_dim_mm = 0.30 * float(font_size_mm)
+
+    if max_area_mm2 is None:
+        # allow slightly smaller than a square of max_dim (since dots are circular-ish)
+        max_area_mm2 = (max_dim_mm * max_dim_mm) * 0.8
+
+    if min_area_mm2 is None:
+        # minimum area: based on a small fraction of em
+        min_dim_mm = 0.06 * float(font_size_mm)
+        min_area_mm2 = (min_dim_mm * min_dim_mm) * 0.25
+
+
+
+    # Label connected components (8-connected)
+    lab = label(bw, connectivity=2)
+    props = regionprops(lab)
+
+    bw_main = bw.copy()
+    dots_mm = []
+
+    for rp in props:
+        area_px = rp.area
+        area_mm2 = area_px / (px_per_mm * px_per_mm)
+
+        # bbox dims
+        minr, minc, maxr, maxc = rp.bbox
+        h_px = maxr - minr
+        w_px = maxc - minc
+        h_mm = h_px / px_per_mm
+        w_mm = w_px / px_per_mm
+
+        #debug
+        print("COMP",
+            "area_mm2=", area_mm2,
+            "w_mm=", w_mm,
+            "h_mm=", h_mm,
+            )
+
+        # Basic smallness tests
+        if area_mm2 < min_area_mm2 or area_mm2 > max_area_mm2:
+            continue
+        if max(h_mm, w_mm) > max_dim_mm:
+            continue
+
+        # Reject elongated “tiny strokes” (keeps dashes, punctuation strokes, etc.)
+        aspect = (max(w_mm, h_mm) / max(1e-6, min(w_mm, h_mm)))
+
+        #debug
+        print("COMP", "aspect=", aspect)
+
+        if aspect > 1.8:
+            continue
+
+        # Dot accepted: compute centroid + radius estimate
+        cy_px, cx_px = rp.centroid
+        cx_mm = cx_px / px_per_mm
+        cy_mm = cy_px / px_per_mm
+
+        # Equivalent circle radius from area
+        r_mm = math.sqrt(area_mm2 / math.pi)
+
+        dots_mm.append((cx_mm, cy_mm, r_mm))
+
+        # Remove this component from main mask so it won't be skeletonized/pruned
+        bw_main[lab == rp.label] = False
+
+        #debug
+        print("ACCEPT DOT:", cx_mm, cy_mm, r_mm)
+
+    return bw_main, dots_mm
+
+
+
+def dots_to_circle_polylines(dots_mm, min_r_mm=0.10, scale=1.2, sides=14):
+    """
+    Convert dot descriptors (cx, cy, r) into small closed polylines (circles as polygons).
+    """
+    out = []
+    for (cx, cy, r) in dots_mm:
+        print("HERE")
+        rr = max(min_r_mm, r * scale)
+        pts = []
+        for i in range(sides + 1):  # +1 to close
+            a = 2.0 * math.pi * (i / sides)
+            pts.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
+        out.append(pts)
+    return out
+
+
+
+
 # =========================
 # High-level "convert text -> centerline SVG"
 # =========================
@@ -612,20 +740,44 @@ def text_to_centerline_polylines(
     Convenience wrapper:
       text -> outline svg -> sampled outline polylines -> centerline polylines
     """
+    print("DEBUG mask_method:", mask_method)
+
     outline_svg = inkscape_text_to_paths(text, font_family, font_size_mm)
     try:
         if mask_method == "Inkscape Raster":
             # Inkscape itself rasterizes the filled outlines (handles overlaps + holes correctly)
             bw = rasterize_outline_svg_to_bw(outline_svg, px_per_mm=skel_px_per_mm)
 
-            if skel_close_gaps:
-                bw = binary_closing(bw, square(3))
+            # 1) Pull out tiny isolated components (dots, diacritics) BEFORE closing
+            # Auto dot thresholds based on font size (mm)
+            auto_max_dim_mm = 0.30 * float(font_size_mm)      # 8mm -> 2.4mm
+            auto_max_area_mm2 = (auto_max_dim_mm ** 2) * 0.8  # rough "dot area" cap
 
-            skel = skeletonize(bw, method="lee")
+            bw_main, dots = extract_small_components_as_dots(
+                bw,
+                px_per_mm=float(skel_px_per_mm),
+                font_size_mm=float(font_size_mm),
+            )
+
+            # 2) Close gaps on the main strokes only
+            if skel_close_gaps:
+                bw_main = binary_closing(bw_main, square(3))
+
+            # 3) Skeletonize and vectorize main strokes
+            skel = skeletonize(bw_main, method="lee")
             centerlines = _vectorize_skeleton(
                 skel, px_per_mm=float(skel_px_per_mm), min_branch_mm=float(skel_min_branch_mm)
             )
+
+            # 4) Re-inject dots as tiny circles
+            dot_polys = dots_to_circle_polylines(dots)
+            centerlines.extend(dot_polys)
+
+            print("DEBUG mask sums:", bw.sum(), bw_main.sum(), "dots:", len(dots))
+
+            # For preview, you can still show the original bw, or bw_main if you prefer
             return bw, centerlines
+
 
         else:
             # Current approach: sample paths -> XOR-filled mask inside centerlines_from_outlines()
@@ -634,6 +786,7 @@ def text_to_centerline_polylines(
             bw, centerlines = centerlines_from_outlines(
                 shaped.polylines_mm,
                 px_per_mm=skel_px_per_mm,
+                font_size_mm=font_size_mm,
                 close_tol_mm=skel_close_mm,
                 min_branch_mm=skel_min_branch_mm,
                 do_close_gaps=skel_close_gaps,
