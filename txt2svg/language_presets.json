@@ -86,7 +86,7 @@
   },
 
     "Arabic (Modern Standard)": {
-    "font_family": "Noto Naskh Arabic",
+    "font_family": "Segoe UI",
     "font_size_mm": 9.0,
     "sample_step_mm": 0.8,
     "skel_px_per_mm": 55,

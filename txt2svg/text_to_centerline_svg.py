@@ -459,8 +459,8 @@ def _vectorize_skeleton(skel_bool: np.ndarray,
     out = []
     for poly in polylines_px:
         pts_mm = [(x / px_per_mm, y / px_per_mm) for (y, x) in poly]
-        if seg_length_mm(pts_mm) >= min_branch_mm:
-            out.append(pts_mm)
+        #if seg_length_mm(pts_mm) >= min_branch_mm:  #REMOVED FOR DEBUG
+        out.append(pts_mm)
 
     return out
 
@@ -674,7 +674,7 @@ class App(tk.Tk):
 
 
         self.language_preset = tk.StringVar(value="Default")
-        self.mask_method = tk.StringVar(value="XOR")
+        self.mask_method = tk.StringVar(value="Inkscape Raster")
         self.font_family = tk.StringVar(value="Noto Sans CJK SC")
         self.font_size_mm = tk.DoubleVar(value=8.0)
         self.sample_step_mm = tk.DoubleVar(value=1.0)
