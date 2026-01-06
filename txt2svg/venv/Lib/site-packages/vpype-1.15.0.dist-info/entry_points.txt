@@ -1,3 +1,0 @@
-[console_scripts]
-vpype=vpype_cli.cli:cli
-
