@@ -7,7 +7,9 @@
     "skel_close_mm": 0.1,
     "skel_min_branch_mm": 0.28,
     "skel_close_gaps": true,
-    "mask_method": "Inkscape Raster"
+    "mask_method": "Inkscape Raster",
+    "vp_linemerge_tol_mm": 0.10,
+    "vp_linesimplify_tol_mm": 0.05
   },
 
   "Latin (English)": {
@@ -15,7 +17,9 @@
     "skel_px_per_mm": 38,
     "sample_step_mm": 1.0,
     "skel_min_branch_mm": 0.10,
-    "skel_close_mm": 0.10
+    "skel_close_mm": 0.10,
+    "vp_linemerge_tol_mm": 0.12,
+    "vp_linesimplify_tol_mm": 0.07
   },
 
   "Chinese (Simplified)": {
@@ -24,7 +28,9 @@
     "skel_px_per_mm": 50,
     "sample_step_mm": 0.8,
     "skel_min_branch_mm": 0.06,
-    "skel_close_mm": 0.08
+    "skel_close_mm": 0.08,
+    "vp_linemerge_tol_mm": 0.08,
+    "vp_linesimplify_tol_mm": 0.03
   },
 
   "Chinese (Traditional)": {
@@ -34,7 +40,9 @@
     "sample_step_mm": 0.7,
     "skel_min_branch_mm": 0.06,
     "skel_close_mm": 0.08,
-    "mask_method": "Inkscape Raster"
+    "mask_method": "Inkscape Raster",
+    "vp_linemerge_tol_mm": 0.07,
+    "vp_linesimplify_tol_mm": 0.025
   },
 
   "Japanese (Kanji)": {
@@ -43,7 +51,9 @@
     "skel_px_per_mm": 60,
     "sample_step_mm": 0.7,
     "skel_min_branch_mm": 0.10,
-    "skel_close_mm": 0.14
+    "skel_close_mm": 0.14,
+    "vp_linemerge_tol_mm": 0.08,
+    "vp_linesimplify_tol_mm": 0.03
   },
 
   "Japanese (Hiragana)": {
@@ -52,7 +62,9 @@
     "skel_px_per_mm": 60,
     "sample_step_mm": 0.6,
     "skel_min_branch_mm": 0.05,
-    "skel_close_mm": 0.12
+    "skel_close_mm": 0.12,
+    "vp_linemerge_tol_mm": 0.07,
+    "vp_linesimplify_tol_mm": 0.025
   },
 
   "Japanese (Katakana)": {
@@ -62,19 +74,23 @@
     "sample_step_mm": 0.7,
     "skel_min_branch_mm": 0.08,
     "skel_close_mm": 0.12,
-    "mask_method" : "Inkscape Raster"
+    "mask_method": "Inkscape Raster",
+    "vp_linemerge_tol_mm": 0.08,
+    "vp_linesimplify_tol_mm": 0.03
   },
 
-    "Korean (Hangul)": {
+  "Korean (Hangul)": {
     "font_family": "Malgun Gothic",
     "skel_close_gaps": true,
     "skel_px_per_mm": 50,
     "sample_step_mm": 0.8,
     "skel_min_branch_mm": 0.10,
-    "skel_close_mm": 0.12
+    "skel_close_mm": 0.12,
+    "vp_linemerge_tol_mm": 0.09,
+    "vp_linesimplify_tol_mm": 0.04
   },
 
-    "Hindi-family (Devanagari)": {
+  "Hindi-family (Devanagari)": {
     "font_family": "Kalam",
     "font_size_mm": 8.0,
     "sample_step_mm": 0.8,
@@ -82,10 +98,12 @@
     "skel_close_mm": 0.10,
     "skel_min_branch_mm": 0.08,
     "skel_close_gaps": true,
-    "mask_method": "Inkscape Raster"
+    "mask_method": "Inkscape Raster",
+    "vp_linemerge_tol_mm": 0.09,
+    "vp_linesimplify_tol_mm": 0.035
   },
 
-    "Arabic (Modern Standard)": {
+  "Arabic (Modern Standard)": {
     "font_family": "Segoe UI",
     "font_size_mm": 9.0,
     "sample_step_mm": 0.8,
@@ -93,7 +111,8 @@
     "skel_close_mm": 0.10,
     "skel_min_branch_mm": 0.08,
     "skel_close_gaps": true,
-    "mask_method": "Inkscape Raster"
+    "mask_method": "Inkscape Raster",
+    "vp_linemerge_tol_mm": 0.06,
+    "vp_linesimplify_tol_mm": 0.02
   }
-
 }
