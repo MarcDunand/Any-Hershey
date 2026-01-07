@@ -1,1 +1,27 @@
 svg_txt
+
+# ------------------
+# Python artifacts
+# ------------------
+txt2svg/__pycache__/
+txt2svg/**/*.pyc
+txt2svg/**/*.pyo
+
+# ------------------
+# Virtual environments
+# ------------------
+txt2svg/venv/
+txt2svg/.env/
+
+# ------------------
+# PyInstaller outputs
+# ------------------
+txt2svg/build/
+txt2svg/dist/
+txt2svg/*.spec
+
+# ------------------
+# OS junk
+# ------------------
+.DS_Store
+Thumbs.db
