@@ -1,0 +1,53 @@
+Metadata-Version: 2.1
+Name: pnoise
+Version: 0.2.0
+Summary: Vectorized port of Processing noise() function
+Home-page: https://github.com/plottertools/pnoise
+Author: Antoine Beyeler
+Author-email: abeyeler@ab-ware.com
+License: LGPL 2.1
+Platform: UNKNOWN
+Classifier: License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Multimedia :: Graphics
+Classifier: Typing :: Typed
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy (>=1.19)
+Requires-Dist: importlib-metadata ; python_version < "3.8"
+
+# *pnoise*
+
+*pnoise* is a pure-Python, Numpy-based, vectorized port of Processing's `noise()` function. The `p` in *pnoise* stands for Processing, Perlin, Python, "port", and probably other things I haven't though of yet.
+
+## Why?
+
+I wrote this port before switching to [vnoise](https://github.com/plottertools/vnoise) and, although I'm no longer using it, I figured I would keep it around. 
+
+## How does it compare to *vnoise*?
+
+| | *pnoise* | *vnoise* |
+| --- | --- | --- |
+| Algorithm | "classic Perlin noise of 1983" | "Perlin improved noise" |
+| License | LGPL v2.1 | MIT |
+| Scalar API | ✅ | ✅ |
+| Vectorized API | ✅ | ✅ |
+| 3D function | ✅ | ✅ |
+| 2D function | ❌ (can be derived from 3D but slower) | ✅ |
+| 1D function | ❌ (can be derived from 3D but slower) | ✅ |
+
+See a performance comparison [here](https://github.com/plottertools/vnoise/tree/main/benchmarks).
+
+## Installation
+
+```
+pip install pnoise
+```
+
+## License
+
+LGPL 2.1, see [LICENSE](LICENSE) file.
+
+
