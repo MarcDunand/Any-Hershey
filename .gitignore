@@ -3,22 +3,22 @@ svg_txt
 # ------------------
 # Python artifacts
 # ------------------
-txt2svg/__pycache__/
-txt2svg/**/*.pyc
-txt2svg/**/*.pyo
+__pycache__/
+*.pyc
+*.pyo
 
 # ------------------
 # Virtual environments
 # ------------------
-txt2svg/venv/
-txt2svg/.env/
+venv/
+.env/
 
 # ------------------
-# PyInstaller outputs
+# PyInstaller outputs (the Windows zip is published as a GitHub release)
 # ------------------
-txt2svg/build/
-txt2svg/dist/
-txt2svg/*.spec
+build/
+dist/
+*.spec
 
 # ------------------
 # OS junk

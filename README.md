@@ -2,8 +2,9 @@
 
 AnyHershey turns typed text into single-stroke SVG lines for a pen plotter or
 cutter to draw. It works with any writing system you can type, in any font
-installed on your computer. Presets tune it for English, Chinese, Japanese,
-Korean, Hindi-family and Arabic text.
+installed on your computer. Presets tune it for Latin-script languages such as
+English and Spanish, as well as Chinese, Japanese, Korean, Hindi-family and
+Arabic text.
 
 ![The AnyHershey window](docs/ui.png)
 
@@ -30,7 +31,7 @@ fonts are used.
    developed with Inkscape 1.4.
 2. Download the Windows zip from the
    [latest release](https://github.com/MarcDunand/Any-Hershey/releases).
-3. Unzip it anywhere, then double-click `txt2svg.exe`.
+3. Unzip it anywhere, then double-click `AnyHershey.exe`.
 
 You don't need Python installed. If generating fails or hangs, Windows Firewall
 may be blocking the background Inkscape process; allow Inkscape through the
@@ -42,7 +43,7 @@ firewall.
 2. Pick the language preset that matches the text.
 3. Press **Generate SVG** and choose where to save the file.
 
-To try it, pick `Latin (English)` and type a word. Then switch to
+To try it, pick `Latin (English, Spanish, etc.)` and type a word. Then switch to
 `Chinese (Simplified)` and paste `你好，世界` to see how it handles a logographic
 script.
 
@@ -52,11 +53,12 @@ the settings from there.
 ### Fonts
 
 The font named in **Font family** must be installed on your computer so
-Inkscape can use it. If Inkscape can't find the font, it silently falls back to
-its default font, and the SVG comes out in that fallback font.
+Inkscape can use it. If Inkscape can't find the font, it falls back to its
+default font, and the SVG comes out in that fallback font. AnyHershey checks
+for the font before generating and warns you if it isn't installed.
 
-Most preset fonts come with Windows: Microsoft YaHei, Microsoft JhengHei,
-Yu Gothic, Malgun Gothic and Segoe UI. Two need installing:
+Most preset fonts come with Windows: Arial, Microsoft YaHei, Microsoft
+JhengHei, Yu Gothic, Malgun Gothic and Segoe UI. Two need installing:
 [Kalam](https://fonts.google.com/specimen/Kalam) (Devanagari preset) and
 [Noto Sans CJK SC](https://github.com/notofonts/noto-cjk) (Default preset).
 See Microsoft's guide to
@@ -80,7 +82,7 @@ See Microsoft's guide to
 ## How it works
 
 AnyHershey turns text into lines in five steps, all in
-`text_to_centerline_svg.py`. Two terms come up throughout: the **mask** is a
+`anyhershey.py`. Two terms come up throughout: the **mask** is a
 black-and-white image of the filled text, and the **skeleton** is the mask
 thinned down to lines one pixel wide.
 
@@ -115,7 +117,7 @@ thinned down to lines one pixel wide.
 | Preset | Font |
 | --- | --- |
 | Default | Noto Sans CJK SC |
-| Latin (English) | keeps the current font |
+| Latin (English, Spanish, etc.) | Arial |
 | Chinese (Simplified) | Microsoft YaHei |
 | Chinese (Traditional) | Microsoft JhengHei |
 | Japanese (Kanji) | Yu Gothic |
@@ -133,8 +135,7 @@ compare fonts for each script.
 Presets are stored in `language_presets.json`. Edit that file to change a
 preset or add one; its keys match the settings above (`font_family`,
 `skel_px_per_mm`, `vp_linemerge_tol_mm` and so on). In the Windows release,
-the file is at `txt2svg/_internal/language_presets.json`. The
-`skel_min_branch_mm` key is not currently used.
+the file is at `AnyHershey/_internal/language_presets.json`.
 
 ## Running from source
 
@@ -144,7 +145,7 @@ Needs Windows, Python 3.11 and Inkscape.
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements-win.txt
-python .\text_to_centerline_svg.py
+python .\anyhershey.py
 ```
 
 `python .\test_vpype.py` checks that vpype works in the current environment.
@@ -158,18 +159,21 @@ locations, but AnyHershey has only been built and tested on Windows.
 .\build_win.ps1
 ```
 
-This runs PyInstaller with the settings in `txt2svg.spec` and writes the app
-to `dist/txt2svg/`. To make a release, zip that folder.
+This builds the app with PyInstaller into `dist/AnyHershey/`, copies
+`README_windows.txt` in next to the exe as `README.txt`, then zips the folder to
+`dist/AnyHershey_windows.zip` for the GitHub release. Build output is
+gitignored.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `text_to_centerline_svg.py` | The whole app: pipeline and UI |
+| `anyhershey.py` | The whole app: pipeline and UI |
 | `language_presets.json` | Language presets |
 | `LanguageFontChoices.svg` | Font comparison sheet for each script |
 | `requirements-win.txt` | Python dependencies |
-| `build_win.ps1`, `txt2svg.spec` | Windows build |
+| `build_win.ps1` | Windows build and release zip |
+| `README_windows.txt` | Instructions included in the release zip |
 | `test_vpype.py` | vpype smoke test |
 
 ## Limitations
@@ -179,5 +183,9 @@ to `dist/txt2svg/`. To make a release, zip that folder.
   the character is handwritten.
 - Where strokes cross or meet, the skeleton can bend or leave short spurs, so a
   junction may not match the font exactly.
-- A missing font is replaced silently. Check the output if a character looks
-  wrong.
+- AnyHershey warns about a font that isn't installed, but not about an
+  installed font that lacks some of the characters in the text. Inkscape draws
+  those characters in another font without saying so. Check the output if a
+  character looks wrong.
+- Fonts added only to Inkscape's own fonts folder, not installed in Windows,
+  can trigger the missing-font warning even though Inkscape can use them.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-text_to_centerline_svg.py
+AnyHershey (anyhershey.py)
 
 Generates hershey font svg for inputted text
 Works for any language, fine-tuned for a short list of common languages
@@ -40,6 +40,7 @@ from xml.sax.saxutils import escape as xml_escape
 # UI
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from tkinter import font as tkfont
 
 
 
@@ -146,6 +147,21 @@ def find_inkscape_executable() -> str:
         "Install Inkscape (v1.0+ recommended), or set INKSCAPE_EXE in the CONFIG section.\n\n"
         "Tried:\n- inkscape on PATH\n- common install locations"
     )
+
+
+def font_is_installed(font_family: str) -> bool:
+    """Return True if font_family is an installed font family.
+
+    Inkscape silently substitutes its default font for a family it can't find,
+    so we check up front. Tk lists the same system and per-user fonts that
+    Inkscape's fontconfig scans. Fonts added only to Inkscape's own fonts
+    folder are not listed, so those can raise a false warning.
+    Must be called after the Tk root window exists.
+    """
+    wanted = font_family.strip().casefold()
+    # Windows also lists vertical-text variants as "@Family"; strip the "@"
+    families = {f.lstrip("@").casefold() for f in tkfont.families()}
+    return wanted in families
 
 
 def vpype_optimize_svg(
@@ -729,7 +745,7 @@ class App(tk.Tk):
 
         self.report_callback_exception = _tk_exception_handler
 
-        self.title("Text → Centerline SVG (Inkscape + Skeletonize)")
+        self.title("AnyHershey")
 
         self.language_preset = tk.StringVar(value="Default")
         self.mask_method = tk.StringVar(value="Inkscape Raster")
@@ -866,6 +882,20 @@ class App(tk.Tk):
             messagebox.showwarning("No text", "Type something first.")
             return
 
+        font_family = self.font_family.get()
+        if not font_is_installed(font_family):
+            self.status.config(text=f"Font not found: {font_family}")
+            proceed = messagebox.askyesno(
+                "Font not found",
+                f'The font "{font_family}" is not installed on this computer.\n\n'
+                "Inkscape will use its default font instead, so the SVG will not "
+                "be in the font you chose.\n\n"
+                "Generate anyway?",
+                icon="warning",
+            )
+            if not proceed:
+                return
+
         out_path = filedialog.asksaveasfilename(
             title="Save centerline SVG",
             defaultextension=".svg",
@@ -883,7 +913,7 @@ class App(tk.Tk):
 
             bw, polylines = text_to_centerline_polylines(
                 text=text,
-                font_family=self.font_family.get(),
+                font_family=font_family,
                 font_size_mm=float(self.font_size_mm.get()),
                 sample_step_mm=float(self.sample_step_mm.get()),
                 skel_px_per_mm=int(self.skel_px_per_mm.get()),

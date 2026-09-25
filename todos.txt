@@ -1,10 +1,15 @@
--note that you need to use inkscape
--make note about how to add fonts to inkscape
-	-https://fonts.google.com/noto/specimen/Noto+Serif+Devanagari
-	-https://fonts.google.com/specimen/Kalam?preview.text=%E0%A4%87%E0%A4%88&query=devanagari
-	-https://fonts.google.com/noto/specimen/Noto+Naskh+Arabic
-	-https://support.microsoft.com/en-us/windows/manage-fonts-in-windows-f12d0657-2fc8-7613-c76f-88d043b334b8
--remove popup saying svg successfully saved?
+Project updates:
+-Recreate venv on this computer (the copied one has no python.exe; venvs don't carry over between machines)
+	-python -m venv venv; .\venv\Scripts\Activate.ps1; pip install -r requirements-win.txt
+-Git cleanup for the fixed .gitignore
+	-git rm -r --cached venv build dist
+	-git rm txt2svg.spec
+	-git add -A
+
+Once updates are done:
+-Rebuild with .\build_win.ps1 and test AnyHershey.exe (missing-font warning, Latin preset uses Arial)
+-New GitHub release: upload dist\AnyHershey_windows.zip, release notes using the AnyHershey name (v0.1 notes and exe still say txt2svg)
+-Update README.md: retake docs/ui.png (window title is now AnyHershey), check the release link and any version references, reflect any preset changes
 
 
 Useful links:

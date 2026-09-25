@@ -5,18 +5,17 @@
     "sample_step_mm": 1.0,
     "skel_px_per_mm": 38,
     "skel_close_mm": 0.1,
-    "skel_min_branch_mm": 0.28,
     "skel_close_gaps": true,
     "mask_method": "Inkscape Raster",
     "vp_linemerge_tol_mm": 0.10,
     "vp_linesimplify_tol_mm": 0.05
   },
 
-  "Latin (English)": {
+  "Latin (English, Spanish, etc.)": {
+    "font_family": "Arial",
     "skel_close_gaps": true,
     "skel_px_per_mm": 38,
     "sample_step_mm": 1.0,
-    "skel_min_branch_mm": 0.10,
     "skel_close_mm": 0.10,
     "vp_linemerge_tol_mm": 0.12,
     "vp_linesimplify_tol_mm": 0.07
@@ -27,7 +26,6 @@
     "skel_close_gaps": true,
     "skel_px_per_mm": 50,
     "sample_step_mm": 0.8,
-    "skel_min_branch_mm": 0.06,
     "skel_close_mm": 0.08,
     "vp_linemerge_tol_mm": 0.08,
     "vp_linesimplify_tol_mm": 0.03
@@ -38,7 +36,6 @@
     "skel_close_gaps": true,
     "skel_px_per_mm": 60,
     "sample_step_mm": 0.7,
-    "skel_min_branch_mm": 0.06,
     "skel_close_mm": 0.08,
     "mask_method": "Inkscape Raster",
     "vp_linemerge_tol_mm": 0.07,
@@ -50,7 +47,6 @@
     "skel_close_gaps": true,
     "skel_px_per_mm": 60,
     "sample_step_mm": 0.7,
-    "skel_min_branch_mm": 0.10,
     "skel_close_mm": 0.14,
     "vp_linemerge_tol_mm": 0.08,
     "vp_linesimplify_tol_mm": 0.03
@@ -61,7 +57,6 @@
     "skel_close_gaps": true,
     "skel_px_per_mm": 60,
     "sample_step_mm": 0.6,
-    "skel_min_branch_mm": 0.05,
     "skel_close_mm": 0.12,
     "vp_linemerge_tol_mm": 0.07,
     "vp_linesimplify_tol_mm": 0.025
@@ -72,7 +67,6 @@
     "skel_close_gaps": true,
     "skel_px_per_mm": 55,
     "sample_step_mm": 0.7,
-    "skel_min_branch_mm": 0.08,
     "skel_close_mm": 0.12,
     "mask_method": "Inkscape Raster",
     "vp_linemerge_tol_mm": 0.08,
@@ -84,7 +78,6 @@
     "skel_close_gaps": true,
     "skel_px_per_mm": 50,
     "sample_step_mm": 0.8,
-    "skel_min_branch_mm": 0.10,
     "skel_close_mm": 0.12,
     "vp_linemerge_tol_mm": 0.09,
     "vp_linesimplify_tol_mm": 0.04
@@ -96,7 +89,6 @@
     "sample_step_mm": 0.8,
     "skel_px_per_mm": 48,
     "skel_close_mm": 0.10,
-    "skel_min_branch_mm": 0.08,
     "skel_close_gaps": true,
     "mask_method": "Inkscape Raster",
     "vp_linemerge_tol_mm": 0.09,
@@ -109,7 +101,6 @@
     "sample_step_mm": 0.8,
     "skel_px_per_mm": 55,
     "skel_close_mm": 0.10,
-    "skel_min_branch_mm": 0.08,
     "skel_close_gaps": true,
     "mask_method": "Inkscape Raster",
     "vp_linemerge_tol_mm": 0.06,
