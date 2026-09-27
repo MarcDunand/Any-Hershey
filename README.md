@@ -54,8 +54,9 @@ the settings from there.
 
 ### Preview
 
-The preview shows the lines exactly as they will be saved. Checkboxes on the
-right turn extra layers on and off:
+The preview shows the lines exactly as they will be saved. It starts white on
+black; uncheck **White on black** for black on white. Checkboxes on the right
+turn extra layers on and off:
 
 | Layer | What it shows |
 | --- | --- |
@@ -75,8 +76,9 @@ forward. The line under the slider gives the number of strokes and points, the
 total drawing and pen-up distances, and the page size.
 
 **Export preview SVG** saves what the preview currently shows, with the
-layers you have on and the slider where it is, on a transparent background.
-Each layer is its own group in the file. This is separate from **Save**, which
+layers you have on and the slider where it is. With **White on black** on, it
+has a black background; with it off, the background is transparent. Each layer,
+the black background included, is its own group in the file. This is separate from **Save**, which
 saves only the lines, for plotting.
 
 ### Fonts

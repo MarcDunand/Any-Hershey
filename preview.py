@@ -5,7 +5,8 @@ Shows the final strokes (what the SVG will contain) with optional layers:
 length colors, true pen width, pen-up path, stroke ends, the rasterized text
 (the mask AnyHershey skeletonized), skeleton pixels, junctions and a mm grid.
 A scrubber replays the plot in drawing order. "Export preview SVG" saves
-exactly what is visible, on a transparent background.
+exactly what is visible: on a transparent background, or on black with
+"White on black" on.
 
 Everything is drawn from one list of shapes in mm (build_ops), which either
 Pillow (the on-screen image) or the SVG exporter renders, so the two match.
@@ -28,16 +29,32 @@ from tkinter import ttk, filedialog, messagebox
 # Look
 # =========================
 
-INK = "#1b1e22"
+# Colored layers keep their colors on either background.
 SHORT_COLOR = "#f07f1a"   # length colors: dots and the shortest strokes
 LONG_COLOR = "#1f5fd1"    # length colors: the longest stroke
-PEN_UP = "#9aa0a6"
-ENDS = "#3b4046"
 JUNCTION = "#d93a3a"
-MASK = (214, 218, 223)
-SKELETON = (120, 128, 136)
-GRID_MINOR = "#eceef1"
-GRID_MAJOR = "#d3d7dc"
+
+# Every gray. "White on black" swaps in DARK, where each gray is inverted
+# (keeping its slight cool tint), so all of these flip together.
+LIGHT = {
+    "bg": "#ffffff",
+    "ink": "#1b1e22",        # strokes, pen marker
+    "pen_up": "#9aa0a6",     # pen-up path and its arrows
+    "ends": "#3b4046",       # stroke start dots and end rings
+    "mask": "#d6dadf",
+    "skeleton": "#788088",
+    "grid_minor": "#eceef1",
+    "grid_major": "#d3d7dc",
+}
+
+
+def _invert_gray(h: str) -> str:
+    rgb = [int(h[i:i + 2], 16) for i in (1, 3, 5)]
+    m = sum(rgb) / 3
+    return "#" + "".join(f"{min(255, max(0, round(255 - m + (c - m)))):02x}" for c in rgb)
+
+
+DARK = {k: _invert_gray(v) for k, v in LIGHT.items()}
 
 # On-screen sizes in display px. The SVG export converts them to mm at the
 # current zoom, so it matches what is on screen.
@@ -228,10 +245,11 @@ LAYERS = [
 ]
 
 
-def build_ops(d: PreviewData, on: dict, t: float, scale: float, pen_mm: float):
+def build_ops(d: PreviewData, on: dict, t: float, scale: float, pen_mm: float, pal: dict = LIGHT):
     """Shapes to draw, bottom to top, as (layer, kind, ...) tuples in mm.
 
     scale is display px per mm, used to turn the on-screen px sizes into mm.
+    pal is LIGHT or DARK.
     """
     px = 1.0 / scale
     ops = []
@@ -242,7 +260,7 @@ def build_ops(d: PreviewData, on: dict, t: float, scale: float, pen_mm: float):
         # 1 mm lines, or 5 mm when 1 mm would be too dense to read; every 10 mm darker.
         step = 1 if scale >= 5 else 5
         for major in (False, True):
-            color = GRID_MAJOR if major else GRID_MINOR
+            color = pal["grid_major"] if major else pal["grid_minor"]
             for x in range(0, int(W) + 1, step):
                 if (x % 10 == 0) == major:
                     ops.append(("grid", "line", np.array([[x, 0], [x, H]]), color, px, None))
@@ -255,7 +273,7 @@ def build_ops(d: PreviewData, on: dict, t: float, scale: float, pen_mm: float):
         ops.append(("skel", "image", "skel"))
     if on["penup"]:
         for a, b in ups:
-            ops.append(("penup", "line", np.array([a, b]), PEN_UP, 1.2 * px, (DASH_PX * px, GAP_PX * px)))
+            ops.append(("penup", "line", np.array([a, b]), pal["pen_up"], 1.2 * px, (DASH_PX * px, GAP_PX * px)))
             seg = b - a
             L = float(np.hypot(*seg))
             if L > 3 * ARROW_PX * px:
@@ -264,22 +282,22 @@ def build_ops(d: PreviewData, on: dict, t: float, scale: float, pen_mm: float):
                 m = a + seg / 2
                 s = ARROW_PX * px / 2
                 ops.append(("penup", "line", np.array([m - u * s + nrm * s, m + u * s, m - u * s - nrm * s]),
-                            PEN_UP, 1.2 * px, None))
+                            pal["pen_up"], 1.2 * px, None))
     if on["strokes"]:
         w = pen_mm if on["penwidth"] else LINE_PX * px
         for i, pts, _ in strokes:
-            color = length_color(d.ranks[i]) if on["colors"] else INK
+            color = length_color(d.ranks[i]) if on["colors"] else pal["ink"]
             ops.append(("strokes", "line", pts, color, w, None))
     if on["junctions"]:
         for x, y in d.junctions:
             ops.append(("junctions", "dot", (x, y), JUNCTION_R_PX * px, None, JUNCTION, 1.5 * px))
     if on["ends"]:
         for _, pts, finished in strokes:
-            ops.append(("ends", "dot", tuple(pts[0]), START_R_PX * px, ENDS, None, 0))
+            ops.append(("ends", "dot", tuple(pts[0]), START_R_PX * px, pal["ends"], None, 0))
             if finished:
-                ops.append(("ends", "dot", tuple(pts[-1]), END_R_PX * px, "#ffffff", ENDS, 1.2 * px))
+                ops.append(("ends", "dot", tuple(pts[-1]), END_R_PX * px, pal["bg"], pal["ends"], 1.2 * px))
     if head is not None:
-        ops.append(("head", "dot", tuple(head), HEAD_R_PX * px, None, INK, 1.5 * px))
+        ops.append(("head", "dot", tuple(head), HEAD_R_PX * px, None, pal["ink"], 1.5 * px))
     return ops
 
 
@@ -306,37 +324,41 @@ class Renderer:
         self.d = data
         self._cache = {}
 
-    def _layer_image(self, key, size):
-        """The mask or skeleton as a transparent RGBA image scaled to `size`."""
-        ck = (key, size)
+    def _rgba(self, key, pal):
+        """The mask or skeleton as a transparent RGBA image, one pixel per mask pixel."""
+        src = self.d.mask if key == "mask" else self.d.skel
+        h = pal["mask" if key == "mask" else "skeleton"]
+        a = np.zeros(src.shape + (4,), dtype=np.uint8)
+        a[src] = [int(h[i:i + 2], 16) for i in (1, 3, 5)] + [255]
+        return Image.fromarray(a, "RGBA")
+
+    def _layer_image(self, key, size, pal):
+        """The mask or skeleton scaled to `size`."""
+        ck = (key, size, pal["bg"])
         if ck not in self._cache:
-            src = self.d.mask if key == "mask" else self.d.skel
-            color = MASK if key == "mask" else SKELETON
-            a = np.zeros(src.shape + (4,), dtype=np.uint8)
-            a[src] = color + (255,)
-            img = Image.fromarray(a, "RGBA")
+            img = self._rgba(key, pal)
             resample = Image.NEAREST if key == "skel" and size[0] > img.size[0] else Image.BOX
             self._cache[ck] = img.resize(size, resample)
         return self._cache[ck]
 
-    def png(self, on, t, scale, pen_mm, ss=SUPERSAMPLE, background=(255, 255, 255, 255)) -> Image.Image:
+    def png(self, on, t, scale, pen_mm, pal=LIGHT, ss=SUPERSAMPLE) -> Image.Image:
         W, H = self.d.size_mm
         S = scale * ss
         size = (max(1, round(W * S)), max(1, round(H * S)))
-        img = Image.new("RGBA", size, background)
+        img = Image.new("RGBA", size, pal["bg"])
         draw = ImageDraw.Draw(img)
 
         def P(p):
             return (p[0] * S, p[1] * S)
 
-        for op in build_ops(self.d, on, t, scale, pen_mm):
+        for op in build_ops(self.d, on, t, scale, pen_mm, pal):
             kind = op[1]
             if kind == "image":
                 # Mask pixel (r, c) is centered on (c, r) / px_per_mm, so the image starts
                 # half a pixel up and left of the origin; crop that half pixel off.
                 h, w = self.d.mask.shape
                 layer = self._layer_image(op[2], (max(1, round(w / self.d.px_per_mm * S)),
-                                                  max(1, round(h / self.d.px_per_mm * S))))
+                                                  max(1, round(h / self.d.px_per_mm * S))), pal)
                 off = round(0.5 / self.d.px_per_mm * S)
                 if off:
                     layer = layer.crop((off, off, layer.size[0], layer.size[1]))
@@ -365,14 +387,17 @@ class Renderer:
             img = img.resize((max(1, round(W * scale)), max(1, round(H * scale))), Image.LANCZOS)
         return img
 
-    def svg(self, on, t, scale, pen_mm) -> str:
+    def svg(self, on, t, scale, pen_mm, pal=LIGHT) -> str:
         W, H = self.d.size_mm
         groups = {}
-        for op in build_ops(self.d, on, t, scale, pen_mm):
+        if pal is DARK:
+            # White lines need the black behind them; its own group, so it's easy to delete.
+            groups["background"] = [f'<rect width="{W:.3f}" height="{H:.3f}" fill="{pal["bg"]}"/>']
+        for op in build_ops(self.d, on, t, scale, pen_mm, pal):
             layer, kind = op[0], op[1]
             g = groups.setdefault(layer, [])
             if kind == "image":
-                g.append(self._svg_image(op[2]))
+                g.append(self._svg_image(op[2], pal))
             elif kind == "line":
                 _, _, pts, color, w, dash = op
                 d = "M" + " L".join(f"{x:.3f} {y:.3f}" for x, y in pts)
@@ -389,14 +414,10 @@ class Renderer:
                 f'<svg xmlns="http://www.w3.org/2000/svg" width="{W:.3f}mm" height="{H:.3f}mm" '
                 f'viewBox="0 0 {W:.3f} {H:.3f}">\n{body}\n</svg>\n')
 
-    def _svg_image(self, key):
-        src = self.d.mask if key == "mask" else self.d.skel
-        color = MASK if key == "mask" else SKELETON
-        a = np.zeros(src.shape + (4,), dtype=np.uint8)
-        a[src] = color + (255,)
+    def _svg_image(self, key, pal):
         buf = io.BytesIO()
-        Image.fromarray(a, "RGBA").save(buf, "PNG", optimize=True)
-        h, w = src.shape
+        self._rgba(key, pal).save(buf, "PNG", optimize=True)
+        h, w = self.d.mask.shape
         half = 0.5 / self.d.px_per_mm
         style = ' style="image-rendering:pixelated"' if key == "skel" else ""
         return (f'<image x="{-half:.4f}" y="{-half:.4f}" width="{w / self.d.px_per_mm:.4f}" '
@@ -424,6 +445,7 @@ class PreviewWindow(tk.Toplevel):
         self._playing = None
 
         self.on = {k: tk.BooleanVar(value=v) for k, _, v in LAYERS}
+        self.dark = tk.BooleanVar(value=True)
         self.pen_mm = tk.StringVar(value=f"{data.pen_mm:g}")
         self.scrub = tk.DoubleVar(value=self.t)
 
@@ -442,12 +464,14 @@ class PreviewWindow(tk.Toplevel):
 
         # A Canvas, not a Label: a Label grows to fit its image, which would fight
         # the fit-to-window scaling below.
-        self.view = tk.Canvas(self, background="white", highlightthickness=0, width=200, height=120)
+        self.view = tk.Canvas(self, background=self._pal()["bg"], highlightthickness=0, width=200, height=120)
         self.view.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=10)
         self.view.bind("<Configure>", lambda e: self._redraw_later())
 
         side = ttk.Frame(self, padding=(12, 10))
         side.grid(row=0, column=1, sticky="ns")
+        ttk.Checkbutton(side, text="White on black", variable=self.dark,
+                        command=self._on_dark).pack(anchor="w", pady=(0, 10))
         ttk.Label(side, text="Show:").pack(anchor="w", pady=(0, 4))
         for key, label, _ in LAYERS:
             indent = 18 if key in ("colors", "penwidth") else 0
@@ -487,6 +511,13 @@ class PreviewWindow(tk.Toplevel):
     def _layers(self):
         return {k: v.get() for k, v in self.on.items()}
 
+    def _pal(self):
+        return DARK if self.dark.get() else LIGHT
+
+    def _on_dark(self):
+        self.view.configure(background=self._pal()["bg"])
+        self._redraw_later()
+
     def _pen(self):
         try:
             return max(0.01, float(self.pen_mm.get()))
@@ -506,7 +537,7 @@ class PreviewWindow(tk.Toplevel):
 
     def _redraw(self, ss=SUPERSAMPLE):
         self._pending = None
-        img = self.r.png(self._layers(), self.t, self._scale(), self._pen(), ss=ss)
+        img = self.r.png(self._layers(), self.t, self._scale(), self._pen(), self._pal(), ss=ss)
         self._imgtk = ImageTk.PhotoImage(img.convert("RGB"))
         self.view.delete("all")
         self.view.create_image(self.view.winfo_width() // 2, self.view.winfo_height() // 2,
@@ -551,7 +582,7 @@ class PreviewWindow(tk.Toplevel):
             return
         try:
             with open(path, "w", encoding="utf-8") as f:
-                f.write(self.r.svg(self._layers(), self.t, self._scale(), self._pen()))
+                f.write(self.r.svg(self._layers(), self.t, self._scale(), self._pen(), self._pal()))
         except Exception as e:
             messagebox.showerror("Export failed", str(e), parent=self)
 
