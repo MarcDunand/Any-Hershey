@@ -41,7 +41,9 @@ firewall.
 
 1. Type or paste text into the box. Line breaks are kept.
 2. Pick the language preset that matches the text.
-3. Press **Generate SVG** and choose where to save the file.
+3. Press **Generate SVG**. A preview opens once the text is converted.
+4. Press **Save** and choose where to save the file, or **Cancel** to go back
+   and change the settings.
 
 To try it, pick `Latin (English, Spanish, etc.)` and type a word. Then switch to
 `Chinese (Simplified)` and paste `你好，世界` to see how it handles a logographic
@@ -49,6 +51,33 @@ script.
 
 For text that mixes writing systems, start from the `Default` preset and adjust
 the settings from there.
+
+### Preview
+
+The preview shows the lines exactly as they will be saved. Checkboxes on the
+right turn extra layers on and off:
+
+| Layer | What it shows |
+| --- | --- |
+| mm grid | 1 mm lines (5 mm when zoomed far out), darker every 10 mm |
+| Rasterized text (mask) | The black-and-white image of the text that the lines were traced from, at the same scale |
+| Skeleton pixels | The one-pixel-wide skeleton of that image |
+| Pen-up path | Dashed moves between lines, with small arrows for direction |
+| Strokes | The lines themselves |
+| Length colors | Strokes from orange (the shortest, including dots) to blue (the longest), by rank |
+| True pen width | Strokes drawn as wide as the pen width you type in, to check where lines will run together |
+| Junctions | Where three or more lines of the skeleton meet |
+| Stroke ends | A dot where each line starts and a ring where it ends |
+
+The slider under the preview replays the plot in drawing order, including the
+pen-up moves. Drag it, or press and hold **<** or **>** to play it backward or
+forward. The line under the slider gives the number of strokes and points, the
+total drawing and pen-up distances, and the page size.
+
+**Export preview SVG** saves what the preview currently shows, with the
+layers you have on and the slider where it is, on a transparent background.
+Each layer is its own group in the file. This is separate from **Save**, which
+saves only the lines, for plotting.
 
 ### Fonts
 
@@ -82,15 +111,16 @@ See Microsoft's guide to
 ## How it works
 
 AnyHershey turns text into lines in five steps, all in
-`anyhershey.py`. Two terms come up throughout: the **mask** is a
+`anyhershey.py` (the preview window is in `preview.py`). Two terms come up throughout: the **mask** is a
 black-and-white image of the filled text, and the **skeleton** is the mask
 thinned down to lines one pixel wide.
 
 1. **Text to outlines.** AnyHershey writes the text into an SVG file and has
    Inkscape convert it to paths. Inkscape does the text layout, including
    scripts whose characters join (Arabic) or combine (Devanagari), so
-   AnyHershey doesn't have to. The result is the filled outline of every
-   character.
+   AnyHershey doesn't have to. Text that starts with a right-to-left letter
+   (Arabic, Hebrew) is laid out right to left, with every line starting at
+   the same right edge. The result is the filled outline of every character.
 2. **Outlines to mask.** The outlines are turned into the mask, in one of two
    ways set by **Mask method**:
    - `Inkscape Raster` has Inkscape export the outlines as an image.

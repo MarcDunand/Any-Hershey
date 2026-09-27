@@ -24,6 +24,7 @@ import tempfile
 import subprocess
 import shutil
 import sys
+import unicodedata
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Tuple
@@ -41,6 +42,8 @@ from xml.sax.saxutils import escape as xml_escape
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkinter import font as tkfont
+
+from preview import PreviewData, PreviewWindow
 
 
 
@@ -170,8 +173,11 @@ def vpype_optimize_svg(
     *,
     linemerge_tol_mm: float = VP_LINEMERGE_TOL_MM,
     linesimplify_tol_mm: float = VP_LINESIMPLIFY_TOL_MM,
-) -> None:
-    """Run vpype 'Approach A' IN-PROCESS via vpype_cli.execute()."""
+):
+    """Run vpype 'Approach A' IN-PROCESS via vpype_cli.execute().
+
+    Returns vpype's Document (coordinates in px, 96 per inch).
+    """
 
     try:
         from vpype_cli import execute
@@ -196,7 +202,7 @@ def vpype_optimize_svg(
     )
 
     try:
-        execute(pipeline)
+        return execute(pipeline)
     except Exception as e:
         # execute() raises normal Python exceptions (not subprocess return codes)
         raise RuntimeError(
@@ -204,6 +210,16 @@ def vpype_optimize_svg(
             f"Pipeline:\n{pipeline}\n\n"
             f"Error:\n{e}"
         )
+
+
+def document_polylines_mm(doc) -> List[List[Tuple[float, float]]]:
+    """A vpype Document's lines, in drawing order, in mm."""
+    out = []
+    for layer_id in sorted(doc.layers):
+        for line in doc.layers[layer_id]:
+            out.append([(z.real / PX_PER_MM, z.imag / PX_PER_MM) for z in line])
+    return out
+
 
 def resource_path(rel_path: str) -> str:
     """
@@ -280,7 +296,17 @@ def make_text_svg(text: str, font_family: str, font_size_mm: float) -> str:
         safe_line = line if line != "" else "&#160;"  # NBSP
         tspans.append(f'<tspan x="0" dy="{dy:.2f}">{safe_line}</tspan>')
 
-    tspans_xml = "\n    ".join(tspans)
+    # No whitespace between or around the tspans: xml:space="preserve" would keep
+    # it as text, which shifts right-to-left lines.
+    tspans_xml = "".join(tspans)
+
+    # Right-to-left text (Arabic, Hebrew, ...) is set with direction="rtl", so
+    # punctuation lands on the correct side and every line starts at the same
+    # right edge (for RTL text, the default text-anchor "start" is the right).
+    # The first letter with a strong direction decides.
+    rtl = next((unicodedata.bidirectional(ch) in ("R", "AL") for ch in text
+                if unicodedata.bidirectional(ch) in ("L", "R", "AL")), False)
+    direction = ' direction="rtl"' if rtl else ""
 
     # Large canvas to avoid clipping; baseline at y=font_px for first line.
     return f'''<?xml version="1.0" encoding="UTF-8" standalone="no"?>
@@ -288,9 +314,7 @@ def make_text_svg(text: str, font_family: str, font_size_mm: float) -> str:
      width="1000mm" height="300mm"
      viewBox="0 0 {1000*PX_PER_MM:.2f} {300*PX_PER_MM:.2f}">
   <text x="0" y="{font_px:.2f}" font-family="{font_family}"
-        font-size="{font_px:.2f}" xml:space="preserve">
-    {tspans_xml}
-  </text>
+        font-size="{font_px:.2f}" xml:space="preserve"{direction}>{tspans_xml}</text>
 </svg>'''
 
 
@@ -632,6 +656,15 @@ def centerlines_from_outlines(
 # Export polylines -> SVG
 # =========================
 
+def svg_size_mm(polylines_mm: List[List[Tuple[float, float]]], margin_mm: float = 2.0) -> Tuple[float, float]:
+    """Page size polylines_to_svg gives these polylines."""
+    if not polylines_mm:
+        return 10.0, 10.0
+    maxx = max(x for seg in polylines_mm for (x, _) in seg) + margin_mm
+    maxy = max(y for seg in polylines_mm for (_, y) in seg) + margin_mm
+    return max(10.0, maxx), max(10.0, maxy)
+
+
 def polylines_to_svg(
     polylines_mm: List[List[Tuple[float, float]]],
     out_svg_path: str,
@@ -641,13 +674,7 @@ def polylines_to_svg(
     """
     Write a minimal SVG containing one <path> per polyline.
     """
-    if not polylines_mm:
-        W = H = 10.0
-    else:
-        maxx = max(x for seg in polylines_mm for (x, _) in seg) + margin_mm
-        maxy = max(y for seg in polylines_mm for (_, y) in seg) + margin_mm
-        W = max(10.0, maxx)
-        H = max(10.0, maxy)
+    W, H = svg_size_mm(polylines_mm, margin_mm)
 
     def path_d(seg):
         cmds = [f"M {seg[0][0]:.3f} {seg[0][1]:.3f}"]
@@ -689,10 +716,12 @@ def text_to_centerline_polylines(
     skel_close_mm: float,
     skel_close_gaps: bool,
     mask_method: str,
-) -> Tuple[np.ndarray, List[List[Tuple[float, float]]]]:
+) -> Tuple[np.ndarray, np.ndarray, List[List[Tuple[float, float]]]]:
     """
     Convenience wrapper:
       text -> outline svg -> (mask) -> centerline polylines
+
+    Returns (mask, skeleton, polylines); the first two are for the preview.
     """
     outline_svg = inkscape_text_to_paths(text, font_family, font_size_mm)
     try:
@@ -704,7 +733,7 @@ def text_to_centerline_polylines(
 
             skel = skeletonize(bw, method="lee")
             centerlines = _vectorize_skeleton(skel, px_per_mm=float(skel_px_per_mm))
-            return bw, centerlines
+            return bw, skel, centerlines
 
         shaped = load_and_sample(outline_svg, sample_step_mm)
         bw, centerlines = centerlines_from_outlines(
@@ -714,7 +743,7 @@ def text_to_centerline_polylines(
             do_close_gaps=skel_close_gaps,
             return_bw=True,
         )
-        return bw, centerlines
+        return bw, skeletonize(bw, method="lee"), centerlines
 
     finally:
         try:
@@ -896,13 +925,9 @@ class App(tk.Tk):
             if not proceed:
                 return
 
-        out_path = filedialog.asksaveasfilename(
-            title="Save centerline SVG",
-            defaultextension=".svg",
-            filetypes=[("SVG files", "*.svg")]
-        )
-        if not out_path:
-            return
+        # Converted files wait here until the preview's Save or Cancel.
+        raw_svg = os.path.join(tempfile.gettempdir(), f"raw_{int(time.time() * 1000)}.svg")
+        opt_svg = raw_svg.replace("raw_", "opt_")
 
         try:
             # Ensure Inkscape is available (auto-detect)
@@ -911,7 +936,7 @@ class App(tk.Tk):
             self.status.config(text="Converting…")
             self.update_idletasks()
 
-            bw, polylines = text_to_centerline_polylines(
+            bw, skel, polylines = text_to_centerline_polylines(
                 text=text,
                 font_family=font_family,
                 font_size_mm=float(self.font_size_mm.get()),
@@ -942,39 +967,64 @@ class App(tk.Tk):
                 self.preview.config(image="")
                 self._preview_imgtk = None
 
-            # --- write raw SVG to a temp file, then vpype-optimize into the chosen output path ---
-            raw_svg = os.path.join(tempfile.gettempdir(), f"raw_{int(time.time() * 1000)}.svg")
+            # --- write raw SVG to a temp file, then vpype-optimize it ---
             polylines_to_svg(polylines, raw_svg)
+            result_svg, final = opt_svg, polylines
 
             try:
                 lm = max(0.0, float(self.vp_linemerge_tol_mm.get()))
                 ls = max(0.0, float(self.vp_linesimplify_tol_mm.get()))
 
-                vpype_optimize_svg(
+                doc = vpype_optimize_svg(
                     raw_svg,
-                    out_path,
+                    opt_svg,
                     linemerge_tol_mm=lm,
                     linesimplify_tol_mm=ls,
                 )
+                final = document_polylines_mm(doc)
             except Exception as vp_err:
                 # Fall back to raw output if vpype fails for any reason.
-                shutil.copyfile(raw_svg, out_path)
+                result_svg = raw_svg
                 messagebox.showwarning(
                     "vpype optimization failed",
-                    "Saved the unoptimized SVG instead.\n\n"
+                    "The preview and saved file will be the unoptimized SVG.\n\n"
                     f"Details:\n{vp_err}"
                 )
-            finally:
-                try:
-                    os.remove(raw_svg)
-                except Exception:
-                    pass
 
+            # --- preview, then save or cancel ---
+            self.status.config(text="Previewing…")
+            dlg = PreviewWindow(self, PreviewData(
+                strokes=final,
+                mask=bw,
+                skel=skel,
+                px_per_mm=float(self.skel_px_per_mm.get()),
+                size_mm=svg_size_mm(polylines),
+            ))
+            self.wait_window(dlg)
+            if dlg.result != "save":
+                self.status.config(text="Cancelled.")
+                return
+
+            out_path = filedialog.asksaveasfilename(
+                title="Save centerline SVG",
+                defaultextension=".svg",
+                filetypes=[("SVG files", "*.svg")]
+            )
+            if not out_path:
+                self.status.config(text="Cancelled.")
+                return
+            shutil.copyfile(result_svg, out_path)
             self.status.config(text=f"Saved: {out_path}")
 
         except Exception as e:
             self.status.config(text="Error.")
             messagebox.showerror("Error", str(e))
+        finally:
+            for f in (raw_svg, opt_svg):
+                try:
+                    os.remove(f)
+                except Exception:
+                    pass
 
 
 def main() -> None:
