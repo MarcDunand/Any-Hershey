@@ -85,8 +85,9 @@ saves only the lines, for plotting.
 
 The font named in **Font family** must be installed on your computer so
 Inkscape can use it. If Inkscape can't find the font, it falls back to its
-default font, and the SVG comes out in that fallback font. AnyHershey checks
-for the font before generating and warns you if it isn't installed.
+default font (Verdana on most Windows computers), and the SVG comes out in
+that fallback font. If the font isn't installed, a warning appears under
+**Font family** once you click out of the box.
 
 Most preset fonts come with Windows: Arial, Microsoft YaHei, Microsoft
 JhengHei, Yu Gothic, Malgun Gothic and Segoe UI. Two need installing:
@@ -200,13 +201,15 @@ gitignored.
 
 | File | Purpose |
 | --- | --- |
-| `anyhershey.py` | The whole app: pipeline and UI |
+| `anyhershey.py` | The pipeline and the main window |
+| `preview.py` | The preview window |
 | `language_presets.json` | Language presets |
 | `LanguageFontChoices.svg` | Font comparison sheet for each script |
 | `requirements-win.txt` | Python dependencies |
 | `build_win.ps1` | Windows build and release zip |
 | `README_windows.txt` | Instructions included in the release zip |
 | `test_vpype.py` | vpype smoke test |
+| `docs/ui.png` | Screenshot of the AnyHershey window, used in this README |
 
 ## Limitations
 

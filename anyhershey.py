@@ -865,45 +865,64 @@ class App(tk.Tk):
         )
         mask_box.grid(row=4, column=1, sticky="ew", pady=2)
 
-        add_row(5, "Font family:", ttk.Entry(frm, textvariable=self.font_family))
-        add_row(6, "Font size (mm):", ttk.Entry(frm, textvariable=self.font_size_mm))
-        add_row(7, "Sample step (mm):", ttk.Entry(frm, textvariable=self.sample_step_mm))
+        self.font_entry = ttk.Entry(frm, textvariable=self.font_family)
+        add_row(5, "Font family:", self.font_entry)
+        # Shown only while the font family isn't installed and the box isn't being edited
+        self.font_warning = ttk.Label(
+            frm, text="! Font not installed, using default", foreground="#b35900"
+        )
+        self.font_warning.grid(row=6, column=1, sticky="w", pady=(0, 2))
+        self.font_entry.bind("<FocusIn>", lambda e: self.font_warning.grid_remove())
+        self.font_entry.bind("<FocusOut>", lambda e: self._update_font_warning())
+        self.font_family.trace_add("write", lambda *_: self._update_font_warning())
+        self._update_font_warning()
+        # Tk doesn't move focus on a click on empty space, so do it here to
+        # take focus out of the font box
+        frm.bind("<Button-1>", lambda e: frm.focus_set())
+        add_row(7, "Font size (mm):", ttk.Entry(frm, textvariable=self.font_size_mm))
+        add_row(8, "Sample step (mm):", ttk.Entry(frm, textvariable=self.sample_step_mm))
 
-        ttk.Separator(frm).grid(row=8, column=0, columnspan=4, sticky="ew", pady=8)
+        ttk.Separator(frm).grid(row=9, column=0, columnspan=4, sticky="ew", pady=8)
 
-        add_row(9, "Skeleton px/mm:", ttk.Entry(frm, textvariable=self.skel_px_per_mm))
-        add_row(10, "Closed-loop tol (mm):", ttk.Entry(frm, textvariable=self.skel_close_mm))
+        add_row(10, "Skeleton px/mm:", ttk.Entry(frm, textvariable=self.skel_px_per_mm))
+        add_row(11, "Closed-loop tol (mm):", ttk.Entry(frm, textvariable=self.skel_close_mm))
         ttk.Checkbutton(
             frm,
             text="Close tiny gaps before skeletonize",
             variable=self.skel_close_gaps
-        ).grid(row=11, column=0, columnspan=2, sticky="w", pady=2)
+        ).grid(row=12, column=0, columnspan=2, sticky="w", pady=2)
 
-        ttk.Separator(frm).grid(row=12, column=0, columnspan=4, sticky="ew", pady=8)
+        ttk.Separator(frm).grid(row=13, column=0, columnspan=4, sticky="ew", pady=8)
 
         # vpype post-processing knobs
-        add_row(13, "vpype linemerge tol (mm):", ttk.Entry(frm, textvariable=self.vp_linemerge_tol_mm))
-        add_row(14, "vpype linesimplify tol (mm):", ttk.Entry(frm, textvariable=self.vp_linesimplify_tol_mm))
+        add_row(14, "vpype linemerge tol (mm):", ttk.Entry(frm, textvariable=self.vp_linemerge_tol_mm))
+        add_row(15, "vpype linesimplify tol (mm):", ttk.Entry(frm, textvariable=self.vp_linesimplify_tol_mm))
 
-        ttk.Separator(frm).grid(row=15, column=0, columnspan=4, sticky="ew", pady=8)
+        ttk.Separator(frm).grid(row=16, column=0, columnspan=4, sticky="ew", pady=8)
 
 
         self._preview_imgtk = None  # keep a reference so Tk doesn't garbage-collect
 
         if DEBUG:
-            ttk.Label(frm, text="Mask preview (bw):").grid(row=16, column=0, sticky="w", pady=(8, 2))
+            ttk.Label(frm, text="Mask preview (bw):").grid(row=17, column=0, sticky="w", pady=(8, 2))
             self.preview = ttk.Label(frm)
-            self.preview.grid(row=17, column=0, columnspan=4, sticky="w", pady=(0, 6))
+            self.preview.grid(row=18, column=0, columnspan=4, sticky="w", pady=(0, 6))
         else:
             # Still create the widget so on_generate() can safely call self.preview.config(...)
             self.preview = ttk.Label(frm)
 
 
         btn = ttk.Button(frm, text="Generate SVG…", command=self.on_generate)
-        btn.grid(row=18, column=0, sticky="w")
+        btn.grid(row=19, column=0, sticky="w")
 
         self.status = ttk.Label(frm, text="Ready.")
-        self.status.grid(row=18, column=1, columnspan=3, sticky="w")
+        self.status.grid(row=19, column=1, columnspan=3, sticky="w")
+
+    def _update_font_warning(self) -> None:
+        if self.focus_get() is self.font_entry or font_is_installed(self.font_family.get()):
+            self.font_warning.grid_remove()
+        else:
+            self.font_warning.grid()
 
     def on_generate(self) -> None:
         text = self.txt.get("1.0", "end").strip()
@@ -911,19 +930,11 @@ class App(tk.Tk):
             messagebox.showwarning("No text", "Type something first.")
             return
 
+        # Leave the font box so its warning shows during conversion
+        self.focus_set()
+        self._update_font_warning()
+
         font_family = self.font_family.get()
-        if not font_is_installed(font_family):
-            self.status.config(text=f"Font not found: {font_family}")
-            proceed = messagebox.askyesno(
-                "Font not found",
-                f'The font "{font_family}" is not installed on this computer.\n\n'
-                "Inkscape will use its default font instead, so the SVG will not "
-                "be in the font you chose.\n\n"
-                "Generate anyway?",
-                icon="warning",
-            )
-            if not proceed:
-                return
 
         # Converted files wait here until the preview's Save or Cancel.
         raw_svg = os.path.join(tempfile.gettempdir(), f"raw_{int(time.time() * 1000)}.svg")
